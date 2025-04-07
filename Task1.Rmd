@@ -1,0 +1,1171 @@
+---
+title: "Loans in India"
+author: "Laura Carralero and Ana Polo"
+date: "13/10/2024"
+output:
+  pdf_document: 
+    toc: true 
+    toc_depth: 3  
+    number_sections: true  
+  html_document: 
+    toc: true 
+    toc_depth: 3  
+    number_sections: true 
+bibliography: "C:/Users/laull/Downloads/bibliografia.bib"
+---
+
+
+```{r setup, include=FALSE}
+
+library(knitr)
+def.chunk.hook  = knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x = def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+
+opts_chunk$set(echo=TRUE, warning=FALSE, comment=NA, size='small', message=FALSE,
+                      fig.align='center', out.width = "80%", out.length = "80%",
+                      class.source = 'bg-info', class.output = 'bg-warning',
+                      tidy.opts=list(width.cutoff=50), cache=TRUE, message=FALSE)
+
+library(formatR)
+```
+
+
+\newpage
+
+## Introduction 
+
+India is a country with a very large population (the probability of being born in India is 17,7%) and with significant social and economic disparities among its people. Due to this, we found it interesting to observe which variables influence the ability to obtain a financial loan within its population. We focused on variables such as the loan amount, the annual income of the applicant or the education to conduct this analysis. Since a considerate part of the population is not even allowed to request a loan due to the caste system imposed in India, our population only represent a small portion of the country. 
+
+The caste system continues to play a significant role in determining access to economic resources and opportunities in India. While legal frameworks and government initiatives aim to bridge the gap, caste-based economic exclusion remains a major issue, particularly in terms of access to loans. This topic will arise several times on the analysis since there is a huge difference between their values on different assets, their education, etcetera, which might affect the result of the loan status.
+
+To make this analysis more complete and focus on the actual situation of this country, we have relied on the following articles: [@Bandyopadhyay2016],
+[@Tiwari2013] and [@Abhiman2007].
+
+## Our Loans Dataset
+
+Our dataset is about the parameters that made a loan be approved or denied, in particular this data set contains data from 4269 applicants from India. We have chosen this dataset because, taking into consideration our own situations and concerns, we would like to investigate how easy it is to get a loan from a bank account in that country. Just to compare if the Indian population face the same problems as the Spanish youth, which are the need of a huge amount of money to even ask for a loan (in our case to be able to buy a house). So let's study some parameters on this applicants and what are the main factors that affect if a loan is approved or not.
+
+Out dataset is from kaggle and can be found here: https://www.kaggle.com/datasets/architsharma01/loan-approval-prediction-dataset
+
+The table consists on *11 columns* and we have created two more variables that might be of interest for some analysis. The variables are the next ones:
+
+-	**loan_id ** (id): a number to identify each applicant and protect his/her privacy
+
+- **education** (char): if the applicant has graduated from university or not
+
+-	**no_of_dependents** (num): the number of dependents from each applicant
+
+-	**income_an** (num): the annual income of the borrower
+
+-	**loan_amount** (num): the amount of asked from the bank
+
+-	**loan_term** (num): the duration for which the loan is taken in years
+
+-	**cibil_score** (num): the cibil score, which is a specific type of credit score used in India reflecting their ability to repay loans. The credit risk is the possibility of loss due to a borrower's defaulting on a loan or not meeting contractual obligations. This cibil score range from 300 to 900, where a low CIBIL score typically indicates that an individual has poor creditworthiness or is considered a higher credit risk by lenders.
+
+-	**residential_assets_value** (num): the value of the borrower’s residential assets, for example his/her properties, house, etcetera. 
+
+-	**commercial_assets_value** (num): The value of any commercial assets owned by the borrower (e.g., business properties). This can also indicate financial stability.
+
+-	**luxury_assets_value** (num): The value of luxury items owned by the borrower (e.g., expensive cars, jewelry). While not essential, this can reflect the borrower’s lifestyle and potential financial strain.
+
+-	**bank_asset_value** (num): The total value of assets held in the bank by the borrower. This provides insight into the borrower’s liquid assets.
+
+-	**loan_status** (char.): Indicates the status of the loan ( approved or rejected). This is crucial for understanding the outcome of loan applications. 
+
+
+We also have created these two variables:
+
+-   **Cibil_score_char**: we have created a variable from the cibil score that group the applicants based on their risk of non-payment. We have follow this table to create the categories:
+
+| Cibil Score | 	    Category        | 
+|-------------|-----------------------|
+| 300-549     | Poor credit risk      |
+| 550-649     | Fair credit risk      |
+| 650-749     | Good credit risk      |
+| 750-900     | Excellent credit risk |
+
+
+-   **Total assets**: the sum of residential_assets_value, commercial_assets_value     , bank_asset_value and luxury_assets_value. 
+
+Note that **we haven't deleted the variables that sum up the total assets** because each of them may have different impact on the situation of the loan, so it may be interesting to study them one by one.
+
+
+The first code that may be interesting are the ones that enable as to have a basic notion on the table, its columns plus the ones we have created:
+
+```{r first_view, tidy = TRUE, tidy.opts = list(width.cutoff = 40)}
+#Let call our table as loans.
+loans <- read.csv("C:/Users/laull/Programación R/loan_approval_dataset.csv")
+
+library(dplyr)
+library(pander)
+library(ggplot2)
+
+#We create the columns described before
+loans$total_assets = rowSums (cbind(loans$residential_assets_value, loans$commercial_assets_value, loans$bank_asset_value, loans$luxury_assets_value  ,na.rm=FALSE))
+
+loans <- loans %>%
+  mutate(cibil_score_char = case_when(
+    cibil_score >= 300 & cibil_score <= 549 ~ "Poor credit risk",
+    cibil_score >= 550 & cibil_score <= 649 ~ "Fair credit risk",
+    cibil_score >= 650 & cibil_score <= 749 ~ "Good credit risk",
+    cibil_score >= 750 & cibil_score <= 900 ~ "Excellent credit risk",
+    TRUE ~ NA_character_  
+    
+  ))
+# View the first few rows
+pander(head(loans))
+
+# Check the type of data
+sapply(loans, class)
+```
+
+We have also checked if the data was balanced, this means that the number of loans approved are around half of the sample:
+
+```{r balanced_table, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+nrows= nrow(loans)
+approved = nrow(loans[trimws(loans$loan_status) == "Approved", ])
+print(approved / nrows)
+```
+Since around 62% of the applicants has their loan approved, we can consider that the data is balanced and therefore easier to work with in the second part of the assignment.
+
+Apart from that, we should make other important steps before beginning the analysis:
+
+1.    Check if there is any missings on the data
+
+```{r missings, tidy = TRUE, tidy.opts = list(width.cutoff = 60) }
+missings= colSums(is.na(loans))
+cat("The missings are:\n")
+print(missings)
+```
+
+2.   Check for duplicates:
+
+```{r duplicated, tidy = TRUE, tidy.opts = list(width.cutoff = 60) }
+# Check for rows duplicated but with different ID
+
+cols_to_check <- loans[, !names(loans) %in% "loan_id"]
+num_duplicados <- sum(duplicated(cols_to_check))
+print(paste("There are", num_duplicados, "rows with the same values"))
+
+# Check for duplicate Loan_ids
+dup_ids = sum(duplicated(loans$Loan_id))
+print(paste("There are", dup_ids, "rows with the same ID"))
+```
+
+3.    Change the character columns into factors, so we can group afterwards by their categories.
+
+``` {r factors, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+loans$education <- as.factor(loans$education)
+loans$self_employed <- as.factor(loans$self_employed)
+loans$loan_status <- as.factor(loans$loan_status)
+loans$cibil_score_char <- as.factor(loans$cibil_score_char)
+```
+
+This change has several benefits  since converting columns to factors in R improves memory efficiency by storing categorical data as integers rather than strings, making it ideal for large datasets. It also ensures that categorical variables are treated correctly in statistical models, enabling proper contrasts and groupings. 
+
+Additionally, factors help with data visualization, allowing better control over category ordering and labeling, while maintaining data integrity by limiting values to predefined levels.
+
+## Analysis with frequency tables
+
+The frequency tables allow as to study how the data is distributed in different categories, if the variable is categorical or in different bins if we study a continuous variable. 
+
+For this section we are going to use the **fdth** library in R, that allow as to create these frequency tables for categorical and numerical data. In particular, we find useful to separate the ranges in the same name of intervals, that way we can study also the variability of the continuous variables by the length of the bins. To choose how many bins there are I will follow the **Sturge's rule**, that calculates the number of intervals based on the number of observations following the next formula:
+
+$$
+\text{Number of intervals} = \lceil {Log(N)} \rceil +1,
+$$
+where N is the number of observations (sample size), and we are using the ceiling function (round up) over the logarithm of N. In our case, since we have a small dataset this is a rule that fits well with our data and the result are 14 intervals.
+
+```{r frquency_tables, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+library(fdth)
+
+# Step 1: Define the bounds of the range
+income_min <- min(loans$income_annum, na.rm = TRUE)
+income_max <- max(loans$income_annum, na.rm = TRUE)
+
+# Define number of bins based on the Sturge´s rule
+n_bins <- ceiling(log(nrows, base= 2))+1
+bin_width <- (income_max - income_min) / n_bins
+print( paste("The bin width is", bin_width))
+
+# Define a vector with breakpoints between bins
+breaks_custom <- seq(income_min, income_max, by = bin_width)
+
+# Step 2: Use the cut() function to bin the data
+loans$income_binned <- cut(loans$income_annum, breaks = breaks_custom, include.lowest = TRUE, right = FALSE)
+
+# Step 3: Create a frequency table
+freq_table <- as.data.frame(table(loans$income_binned))
+
+# Rename the columns for clarity
+colnames(freq_table) <- c("Income_Range", "Frequency")
+
+# Step 4: Calculate midpoints (class marks), density, and percentage
+# Lower bounds of the bins
+freq_table$Lower.bound <- breaks_custom[-length(breaks_custom)]  
+# Upper bounds of the bins
+freq_table$Upper.bound <- breaks_custom[-1]   
+freq_table$Midpoints <- (freq_table$Lower.bound + freq_table$Upper.bound) / 2
+freq_table$Cumulative_Frequency <- cumsum(freq_table$Frequency)
+
+# Calculate percentage of total
+total_count <- sum(freq_table$Frequency)
+freq_table$Percentage <- (freq_table$Frequency / total_count) * 100
+
+freq_table = freq_table %>%
+  mutate(across(where(is.numeric), round, 2)) %>%
+  mutate(Percentage = paste0(Percentage, "%"))
+
+
+# Step 5: View the final frequency table
+pander(freq_table)
+
+
+```
+
+As we can see, the minimum annual income is 200.000 and the maximum is 9.900.000, moreover we can confirm that the annual income of our applicants is distributed smoothly between this range, since all the 14 intervals have around 6-7% of the total sample. 
+From this we can conclude that the people that asks for a loan does nos represent the overall population of India, since the annual income of a population usually follows a right-skewed distribution, because most of the people have a lower annual income compare to the salaries of the upper class, which are a minority. This supports the idea we mentioned at the introduction that only a small percentage of the whole population ask for loans.
+
+
+Let's see the frequency table of the other variables:
+```{r frquency_table2, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+
+# Step 1: Define the bounds of the range
+tot_assets_min <- min(loans$total_assets, na.rm = TRUE)
+tot_assets_max <- max(loans$total_assets, na.rm = TRUE)
+
+# Define the bins width and a vector with breakpoints between bins
+bin_width2 <- (tot_assets_max - tot_assets_min) / n_bins
+print( paste("The bin width is", bin_width2))
+breaks_custom2 <- seq(tot_assets_min, tot_assets_max, by = bin_width2)
+
+# Step 2: Use the cut() function to bin the data
+loans$tot_assets_binned <- cut(loans$total_assets, breaks = breaks_custom2, include.lowest = TRUE, right = FALSE)
+
+# Step 3: Create a frequency table
+freq_table2 <- as.data.frame(table(loans$tot_assets_binned))
+
+# Rename the columns for clarity
+colnames(freq_table2) <- c("Income_Range", "Frequency")
+
+# Step 4: Calculate midpoints (class marks), density, and percentage
+# Lower bounds of the bins
+freq_table2$Lower.bound <- breaks_custom2[-length(breaks_custom2)] 
+# Upper bounds of the bins
+freq_table2$Upper.bound <- breaks_custom2[-1]   
+freq_table2$Midpoints <- (freq_table2$Lower.bound + freq_table2$Upper.bound) / 2
+freq_table2$Bin_Width <- freq_table2$Upper.bound - freq_table2$Lower.bound
+freq_table2$Cumulative_Frequency <- cumsum(freq_table2$Frequency)
+# Calculate percentage of total
+total_count2 <- sum(freq_table2$Frequency)
+freq_table2$Percentage <- (freq_table2$Frequency / total_count2) * 100
+
+freq_table2 = freq_table2 %>%
+  mutate(across(where(is.numeric), round, 2)) %>%
+  mutate(Percentage = paste0(Percentage, "%"))
+
+# Step 5: View the final frequency table
+pander(freq_table2)
+
+```
+We can see from this table what we discussed earlier: as expected, the total assets of the applicants are concentrated in the lower values. We can calculate that 81.5% of the entire sample falls below the ninth interval. This indicates that a minority of applicants possess significantly higher total assets compared to the rest. Additionally, we notice that the bandwidth is slightly less than 10 times the previous one, which means there is considerably more variance in total assets than in annual incomes. In other words, individuals in different categories of total assets can exhibit significant variation in the values of this variable.
+
+Why does this happen? Several factors might contribute to these differences between the two variables. One possible explanation is that while salaries don't differ significantly, the applicants' properties or assets may fluctuate more. This could be due to the fact that certain types of assets are not accessible to most of the population—perhaps due to high costs, lack of knowledge about assets, or limited use of banks in India from the majority of the population. For example, luxury assets might not be available to many people because of their price or the castes system mentioned in the introduction.
+
+This statement can be supported by watching the scatter plot that contains both variables. In this plot we should see that only people with higher values have access to higher assets. Moreover, as we have said these assets will be more fluctuating, in other words, they will have a considerable variance even in the same range of salaries, since the assets have more dispersion than the salary. Let's check out the plot:
+
+
+```{r plotscatter1 , tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+library(ggplot2)
+plot = ggplot(loans, aes(x=income_annum, y=total_assets))
+plot + geom_point()+ labs(title = "Total assets vs annual income", x = "Annual Income", y = "Total assets") 
+
+```
+Furthermore, if we look into some particular asset, we are going to see that the possesion of this asset change a lot depending on the annual income. In particular, we are going to study the residential asset, this is the output: 
+
+```{r plotscatterRes , tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+plot = ggplot(loans, aes(x=income_annum, y=residential_assets_value))
+plot + geom_point()+ labs(title = "Residential assets vs annual income", x = "Annual Income", y = "Residential assets") 
+
+```
+
+This indicates that once a certain income threshold is crossed, access to housing becomes much more attainable. Not only does it become easier, but it also increases exponentially. This can occur either because the homes of higher-income individuals are significantly more expensive than average, or because the number of properties they own rises considerably—whether for personal use, such as vacation homes, or as a secondary source of income.
+
+This give us no hope for two students that may start in the low range of the annual income.
+
+Now we will study the last variable on this section the **loan amount**:
+```{r frquency_table3, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+
+
+# Step 1: Define the bounds of the range
+loan_amount_min <- min(loans$loan_amount, na.rm = TRUE)
+loan_amount_max <- max(loans$loan_amount, na.rm = TRUE)
+
+# Define a vector with breakpoints between bins
+bin_width3 <- (loan_amount_max - loan_amount_min) / n_bins
+print( paste("The bin width is", bin_width3))
+breaks_custom3 <- seq(loan_amount_min, loan_amount_max, by = bin_width3)
+
+# Step 2: Use the cut() function to bin the data
+loans$loan_amount_binned <- cut(loans$loan_amount, breaks = breaks_custom3, include.lowest = TRUE, right = FALSE)
+
+# Step 3: Create a frequency table
+freq_table3 <- as.data.frame(table(loans$loan_amount_binned))
+
+# Rename the columns for clarity
+colnames(freq_table3) <- c("Income_Range", "Frequency")
+
+# Step 4: Calculate midpoints (class marks), density, and percentage
+# Lower bounds of the bins
+freq_table3$Lower.bound <- breaks_custom3[-length(breaks_custom)]  
+# Upper bounds of the bins
+freq_table3$Upper.bound <- breaks_custom3[-1]   
+freq_table3$Midpoints <- (freq_table3$Lower.bound + freq_table3$Upper.bound) / 2
+freq_table3$Cumulative_Frequency <- cumsum(freq_table3$Frequency)
+
+# Calculate percentage of total
+total_count3 <- sum(freq_table3$Frequency)
+freq_table3$Percentage <- (freq_table3$Frequency / total_count3) * 100
+
+freq_table3 = freq_table3 %>%
+  mutate(across(where(is.numeric), round, 2)) %>%
+  mutate(Percentage = paste0(Percentage, "%"))
+
+# Step 5: View the final frequency table
+pander(freq_table3)
+
+
+```
+
+From this table we can see that the distribution of the loans is homogeneus in the intervals with lower values and then decrease rapidly in the last six intervals. This means that while most of the people ask for low and medium loans, there is a minority whose loans are much higher compare to the others. This does not come as a surprise since most of the people has lower values on their assets, and it is expected that the loan each applicant ask for depends on the assets they own and their salaries. Furthermore, only those who have higher values of assets will be able to obtain the highest loans, so people are supposed to ask for loans which are proportionate to their assets.
+
+Let's check that the loan amount increases at the same time as the total assets and the salary amount.
+
+
+```{r scatterloan, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+library(cowplot)
+#Salary vs loan amount
+plot1 = ggplot(loans, aes(x=income_annum, y=loan_amount)) + geom_point() + labs(x = "Annual Income", y = "Loan Amount")
+
+#Total_assets vs loan_amount
+plot2 = ggplot(loans, aes(x=total_assets, y=loan_amount)) + geom_point() + labs(x = "Total assets", y = "Loan Amount") 
+
+#show both toguether
+plot_grid(plot1, plot2, labels=c("A", "B"), ncol = 1, nrow = 2) + labs(title="Distribution of Loan amount through annual income vs total assets")
+```
+We can state that while loan amount increases, both in value and variance, while the other variables increases; there is much more **heteroscedasticity** in the total assets. Meaning that there is a more linear dependecy on the annual income and the loan amount; while having a great value of total assets would tell as that the loan asked is probably higher than the average but we wouldn't be able to approximate a small range for it.
+
+Another analysis of interest that we may approach after seeing this graphics is to compute the The Pearson correlation coefficient between the Loan amount and these two variables. 
+
+
+#### The Pearson correlation coefficient
+
+
+The Pearson correlation coefficient is a statistical measure that quantifies the linear relationship between two variables. It ranges from -1 to 1:   
+
+-   -1: Indicates a perfect negative correlation, meaning that as one variable increases, the other decreases in a perfectly linear fashion. 
+
+-   0: Indicates no correlation between the variables.
+
+-   1: Indicates a perfect positive correlation, meaning that as one variable increases, the other increases in a perfectly linear fashion.   
+
+So watching the plots we expect both pearson correlation coefficients being positive but the coefficient between the annual income and the loan amount would be closer to 1 than the coefficient between the total assets and the loan amount, since these two last variables seems to have a less linear dependence between each other than the first pair. If we compute this coefficient in R we would have the result we have explained:
+
+
+```{r pearsin_coefi, tidy = TRUE, tidy.opts = list(width.cutoff = 50)}
+correlation_coefficient1 <- cor(loans$loan_amount, loans$income_annum)
+correlation_coefficient2 <- cor(loans$loan_amount, loans$total_assets)
+
+print(paste("The correlation coefficient between loan amount and annual income is",correlation_coefficient1 ))
+print(paste("The correlation coefficient between loan amount and total assets is",correlation_coefficient2 ))
+
+```
+
+
+## Analysis of measures of centrality, variability, and shape
+
+Now we are going to make some analysis more in detail for some continuous variables, in particular, we are going to analyze the continuos variables of the last section and maybe look more into detail of one of the assets.
+
+For this section, we are going to use the **psych** package in R , which provides tools for performing various statistical analyses, including descriptive statistics, factor analysis, reliability analysis (e.g., Cronbach's alpha), and principal component analysis (PCA). It's widely used for analyzing survey data and understanding the relationships between different variables. The package also includes functions for handling missing data and data visualization, making it highly versatile for complex datasets. Additionally, the package is highly flexible, allowing for easy customization of analyses and integration with other R packages for comprehensive data exploration and modeling.
+
+The first analysis we are going to make are focused on understanding the distribution of two of the variables analyzed before: the anual income and the loan amount.
+
+Let's begin analyzing the annual income:
+
+```{r apartado2a, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+library(psych)
+descr_anual_income <- loans %>%
+  select(income_annum) %>%
+  describe()
+
+#Round the decimals to two digits
+descr_anual_income = descr_anual_income %>%
+  mutate(across(where(is.numeric), round, 2))
+
+pander(descr_anual_income)
+
+```
+
+These are the caractheristics that we learn from this data:
+
+-   **Data symmetrically distributed**: The first notable observation is that the mean (5.059.124) and the median (5.100.000), which is more robust to outliers, are very close. This suggests that the data is relatively symmetrically distributed and there are not many large outliers—something that could have been expected given the nature of the variable. This conclusion is further supported by the negative kurtosis value (-1.184), indicating that the distribution has lighter tails and fewer extreme outliers, with the data more concentrated around the center. Since the skewness value (-0.013) is slightly negative, we could say that there are more low-income values than high-income values. However, since the skewness coefficient is so small, it does not strongly affect the overall homogeneity of the data.
+
+- **Large variability**: The standard deviation (2.806.840) is quite large, indicating a significant amount of variability in annual income. This means that incomes are spread out across a wide range of values, suggesting potential diversity in the population.Furthermore, the range (9.700.000) is nearly twice the value of the mean and the median. This large range suggests that while the central tendency metrics are close, the dataset still includes a wide spread of income values.  Although it is a large range, we must state that the relatively moderate standard deviation and MAD indicate that most of the data is concentrated within a narrower band around the mean. 
+
+  Another measure that upholds this large variability is the median absolute deviation (MAD) of 3.558.240, which is more robust to outliers that the deviation and is also a large number.
+  
+- **Few outliers**: as we have said before, all the metrics indicate that in this variable there are not many outliers. This is also supported by the "trimmed" mean (5.065.467), since this measure removes extreme values from the calculation of the mean and it is fact very close to the mean and median.
+
+
+Now let's analyze the loan amounts:
+
+```{r apartado2b, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+descr_loan_amount <- loans %>%
+  select(loan_amount) %>%
+  describe()
+
+#Round the decimals to two digits
+descr_loan_amount = descr_loan_amount %>%
+  mutate(across(where(is.numeric), round, 2))
+
+
+pander(descr_loan_amount)
+
+```
+
+For this analysis the conclusions are similar to the one before, we´ve got that:
+
+
+
+-   The **mean** loan amount is 15.133.450 while the median is slightly lower at 14.500.000. The fact that the median is close to the mean suggests that the data might be **relatively symmetrically distributed**, with a few potential outliers not greatly influencing the central tendency. As it happened before, the trimmed mean reinforced this statement, since it is close to both the mean and the median.
+
+-   Variability in the loan amount data is indicated by the standard deviation of 9.043.363. This high standard deviation means that there is **substantial variability**, with loans being dispersed over a wide range of values. Additionally, the median absolute deviation (MAD), a more robust measure of variability, is 10.229.940, which confirms that the middle of the data also exhibits considerable spread.
+
+-   The range of loan amounts is 39.200.000 with the smallest loan being $300.000$ and the largest being 3.500.000. This wide range highlights that while many loans might cluster around the central values, the data includes both very small and very large loan amounts.
+
+-   Skewness is 0,31, indicating a slight positive skew, which means that there are a few higher loan amounts that might stretch the distribution to the right. However, the skewness value is still relatively low, suggesting that the data is close to symmetric.
+
+-   The kurtosis is -0,745, indicating that the distribution has lighter tails compared to a normal distribution. This suggests that extreme values (very high or very low loan amounts) are less frequent than in a normal distribution. Thus, the data is more concentrated around the mean, with fewer extreme outliers.
+
+-   The standard error (SE) of the mean is 138.409,80, which gives an estimate of the accuracy of the mean. This small value relative to the mean indicates that the mean estimate is fairly precise despite the variability in the data.
+
+
+In this section, I will analyze both total assets and residential assets. We have chosen to focus on residential assets because this variable has distinct characteristics that differ from the others, and the analysis of the results will reflect these differences:
+
+``` {r apartado2c , tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+
+descr_assets <- loans %>%
+  select(c(residential_assets_value, total_assets)) %>%
+  describe()
+
+#Round the decimals to two digits
+descr_assets = descr_assets %>%
+  mutate(across(where(is.numeric), round, 2))
+
+pander(descr_assets)
+
+```
+
+When examining total assets, we observe that it shares similar characteristics with the variables previously analyzed. Therefore, we will concentrate on the residential assets variable:
+
+-   The mean is approximately $2.000.000$ higher than the median, indicating the presence of outliers. This is further supported by the trimmed mean being lower than the mean, which suggests that extreme outliers on the higher end are influencing the average. 
+
+-   The kurtosis is positive, meaning that the distribution has heavier tails, indicating more extreme outliers compared to a normal distribution.
+
+- The positive skewness of $0,978$ suggests that the distribution of residential assets is right-skewed, meaning that most values cluster on the lower end, but there are some very high values pulling the distribution to the right.
+
+-   The range is large, spanning from $-100.000$ to $29.100.000$, a total range of $29.200.000$. This wide spread indicates that the data includes both very low and very high values of residential assets, suggesting a diverse population.
+
+- Also, we have detected that the minimum value appears to be negative ($-100.000$), which might warrant further investigation, because in real-world scenarios, negative asset values are unusual, and this could indicate a data entry error or a specific scenario where debt exceeds the value of assets.
+
+
+
+## Comparison of continuos variables in groups
+
+We aim to find if the probability of not paying back a loan is related to the economic position of the applicant or even the amount of money asked. This section is where we are going to take advantage from the variable created **Cibil score**, since it gives each applicant a category depending on their risk of unpaying debts. In this section we are going to answer some questions about **fraud tendencies**, which are the ones that intrigue us, and maybe the reader, the most.
+
+Let's the variable Cibil Score in general:
+
+```{r data_cibil, tidy = TRUE, tidy.opts = list(width.cutoff = 60) }
+cibil_score_data=
+  loans %>%
+    group_by(cibil_score_char) %>%
+      summarise(n = n(), percentage = (n() / nrows * 100))
+
+pander(cibil_score_data)
+```
+
+From this table we can conclude that almost half of the population have a poor credit risk, meaning that in this sample of applicants, most of them have higher credit risk and they are more likely to default on loans or delay payments, thus requiring more scrutiny or stringent terms in financial transactions. On the contrary, only around 25% of the sample are considered to have an excellent credit risk, which might be an advantage for their loans to be approved. 
+
+Now we are going to study the distribution of the other variables based on these categories:
+
+### Do applicants who have more assets or a higher income don't pay their debts?
+
+
+Let's begin first by studying how is the annual income distributed in the different categories:
+
+```{r score_income, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+annual_inc_score=
+  loans %>%
+  group_by(cibil_score_char) %>%
+  summarise(n = n(),
+            percentage = n() / nrows * 100,
+            mean = mean(income_annum),
+            median=median(income_annum),
+            sd = sd(income_annum),
+            cv = sd(income_annum) / mean(income_annum),
+            q25= quantile(income_annum,0.25),
+            q75 = quantile(income_annum,0.75),
+            min = min(income_annum),
+            max = max(income_annum),
+            iqr = IQR(income_annum))%>%
+            mutate(across(where(is.numeric), round, 2))
+            
+ 
+annual_inc_score = annual_inc_score %>%
+  mutate(percentage = paste0(percentage, "%"))
+
+pander(annual_inc_score)   
+```
+
+From this data we can state, unexpectedly (or not), that the applicants that have a Excellent credit risk tends to have a lower annual income compare to the other categories. This is supported by both the mean and the median. Apart from that, the quantiles confirm that this tendency is present in most of the sample but that the different categories have applicants from all the salary ranges. This last point is also implicit in the IQR column, where we can conclude that there is considerate range on annual incomes in each category.
+
+We will study this in more detail in the section of the graphics.
+
+It also happens the same in the total assets table:
+	
+```{r score_total_assets, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+total_assets_score=
+  loans %>%
+  group_by(cibil_score_char) %>%
+  summarise(n = n(),
+            percentage = n() / nrows * 100,
+            mean = mean(total_assets),
+            median=median(total_assets),
+            sd = sd(total_assets),
+            cv = sd(total_assets) / mean(total_assets),
+            q25= quantile(total_assets,0.25),
+            q75 = quantile(total_assets,0.75),
+            min = min(total_assets),
+            max = max(total_assets),
+            iqr = IQR(total_assets))%>%
+            mutate(across(where(is.numeric), round, 2))
+            
+ 
+total_assets_score = total_assets_score %>%
+  mutate( percentage= paste0(percentage, "%"))
+ 
+pander(total_assets_score)   
+```
+
+From this data we would make the same conclussions as the prior table.
+
+
+Something that may be of interest is to compare the scatter plot made before to study the total assets based on the salary divided by groups:
+
+```{r plotscatter , tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+
+plot = ggplot(loans, aes(x=income_annum, y=total_assets, color= cibil_score_char))
+plot + geom_point()+ labs(title = "Classification of continuos variables by Cibil score", x = "Annual Income", y = "Total assets") 
+
+```
+
+The data clearly shows that it doesn't exist a trend in colors on the plot, indicating that the risk of loans going unpaid is consistent across different ranges of annual income and total assets.
+
+###   Are defaulters also the ones that ask for a higher money loan?
+
+	
+```{r score_loan,}
+loan_amount_score=
+  loans %>%
+  group_by(cibil_score_char) %>%
+  summarise(n = n(),
+            percentage = n() / nrows * 100,
+            mean = mean(loan_amount),
+            median=median(loan_amount),
+            sd = sd(loan_amount),
+            cv = sd(loan_amount) / mean(loan_amount),
+            q25= quantile(loan_amount,0.25),
+            q75 = quantile(loan_amount,0.75),
+            min = min(loan_amount),
+            max = max(loan_amount),
+            iqr = IQR(loan_amount))%>%
+            mutate(across(where(is.numeric), round, 2))
+            
+ 
+loan_amount_score = loan_amount_score %>%
+  mutate(percentage = paste0(percentage, "%"))
+ 
+
+pander(loan_amount_score)   
+```
+
+Although there is a tendency of asking a lower loan from the applicants who have an excellent credit risk, from this last table we conclude, disappointingly, that there is a lot of variety on the loan amounts in the different categories of cibil score. We are going to do further analysis to conclude so. 
+
+In other words, we would like to prove that there is no significant difference in the loan amount between different cibil scores. The first approach would be to make an ANOVA analysis, but since our data has a heavy right tail, it probably does not follow a normal distribution (this will be analyzed in detail in the graphics section). So our second alternative is to compute an **Kruskal-Wallis test**. 
+
+
+#### Kruskal-Wallis test
+
+This is a non-parametric statistical test used to determine if there are statistically significant differences between the medians of three or more independent groups. The test ranks all the data points from all groups together and compares the sum of ranks between groups to assess whether they come from the same distribution.
+
+
+The for this test the hypothesis are:
+
+-   **Null Hypothesis** ($H_0$): The distributions of all groups are identical, implying that the population medians are equal across groups.
+-   **Alternative Hypothesis** ($H_1$): At least one group has a different distribution, indicating that the population medians differ across the groups.
+
+The code is the next one:
+
+```{r  Kruskal-Wallis,}
+# Kruskal-Wallis test for loan amount by CIBIL score 
+kruskal_test_loan <- kruskal.test(loan_amount ~ cibil_score_char, data = loans)
+
+# View the result
+kruskal_test_loan
+```
+
+Since the p-value is 0,2013, we cannot reject the null hypothesis. This means that there is no statistically significant difference in the distributions of loan amounts across the different CIBIL score categories. In other words, based on this test, there is no evidence to suggest that the median loan amounts vary significantly between the CIBIL score categories.
+
+As we have expected, the test supports our conclusions. To make this analysis more complete we are going to use some graphics in 0.7.1 Histograms and density plots.
+
+
+
+
+## Plots.
+
+For this section, we need to use the package **ggplot2** to make the graphs.
+
+### Histograms and density plots.
+
+#### Loan amount.
+
+```{r chunk2,}
+ggplot(loans, aes(loan_amount)) +
+  geom_histogram(aes(y = after_stat(density)), 
+                 color = "mediumvioletred", fill = "hotpink", bins = 13, alpha = 0.7) +
+  geom_density(color = "black") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Distribution of Loan Amount",
+       x = "Loan Amount",
+       y = "Density")
+```
+
+This graph visualizes the loan amount distribution, combining both discrete (histogram) and continuous (density plot) representations to give a clearer idea of the spread and peaks in the data. The histogram gives a view of the frequency distribution of loan amounts, while the density plot provides a smoothed version, giving an idea of the underlying distribution.
+
+The graph reflects loan distribution in India, showing the varying loan amounts provided. The majority of loans in India tend to be small to mid-sized, aimed at individuals and small businesses, reflected in the concentration of loans in the lower to mid-range amounts in the graph. Larger loans, which represent a smaller proportion of the distribution, are typically availed by big corporations or high-value projects. The distribution aligns with the credit structure and economic goals of India, particularly in promoting financial inclusion and supporting economic growth.
+
+#### Annual Income of the Applicant.
+
+```{r chunk3, tidy = TRUE, tidy.opts = list(width.cutoff = 40)}
+ggplot(loans, aes(income_annum)) +
+  geom_histogram(aes(y = after_stat(density)), 
+                 color = "mediumvioletred", fill = "hotpink", bins = 13, alpha = 0.7) +
+  geom_density(color = "black") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Distribution of Annual Income of the Applicant",
+       x = "Annual Income of the Applicant",
+       y = "Density")
+```
+
+This graph, as the last one, gives a view of the frequency distribution of the annual income of the applicant, in this case. This graph illustrates that the sample of applicants is composed of individuals with relatively high incomes, and the distribution is very uniform across this income range in the Indian context. In India, the income distribution and wealth are shaped by the country's large population, economic diversity, and income inequality. India has a wide income gap; a small percentage of the population holds a large portion of the nation's wealth, while a vast majority have relatively low incomes.
+
+#### Credit Score.
+
+```{r chunk4, tidy = TRUE, tidy.opts = list(width.cutoff = 40)}
+ggplot(loans, aes(cibil_score)) +
+  geom_histogram(aes(y = after_stat(density)), 
+                 color = "mediumvioletred", fill = "hotpink", bins = 13, alpha = 0.7) +
+  geom_density(color = "black") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Distribution of Credit Score",
+       x = "Credit Score",
+       y = "Density")
+```
+
+This graph represents the distribution of credit scores among applicants. The frequency distribution of credit scores range from 300 to 900, which is typical in India and many other countries where credit score systems like CIBIL or similar models are used. The heights of the bars suggest that credit scores are distributed across all ranges quite evenly, without major concentration in any specific range. In India, credit scores are typically assessed by agencies like CIBIL (Credit Information Bureau India Limited). A credit score of 750 and above is often considered excellent, making individuals eligible for loans with favorable terms. Scores in the 600-750 range are still decent but may result in stricter loan conditions or slightly higher interest rates. Scores below 600 could be considered risky, and individuals might face challenges in securing credit. The density curve suggests that the distribution is relatively uniform, although there is a slight peak in the middle, around the 600 to 700 range.
+
+### QQ-plots.
+
+To contrast the normality of these distributions, we will examine the normal QQ-plots.
+
+#### QQ-plot for Loan Amount.
+
+```{r chunk5, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+ggplot(loans, aes(sample = loan_amount))+
+  stat_qq(color = "hotpink")+
+  stat_qq_line(color = "mediumvioletred")+
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "QQ-plot for Loan Amount", x="", y = "")
+```
+
+This QQ-plot suggests that the loan amounts are not normally distributed. Instead, they likely have a positive tendency, meaning there may be many smaller loan amounts and a few very large ones. This is common in loan data sets, where the majority of applicants request moderate loans, while a small portion seeks much larger amounts. This pattern may be seen in cases where some individuals or businesses apply for very large loans, while most others apply for smaller or more typical amounts.
+
+
+#### QQ-plot for Annual Income of the Applicant.
+
+```{r chunk6, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+ggplot(loans, aes(sample = income_annum))+
+  stat_qq(color = "hotpink")+
+  stat_qq_line(color = "mediumvioletred")+
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "QQ-plot for Annual Income of the Applicant", x="", y = "")
+```
+
+This plot shows the distribution of incomes among loan applicants in India and suggests that traditional statistical models might not adequately capture the income variations present in the country, which could impact loan approval and risk models.
+
+#### QQ-plot for Credit Score.
+
+```{r chunk7, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+ggplot(loans, aes(sample = cibil_score))+
+  stat_qq(color = "hotpink")+
+  stat_qq_line(color = "mediumvioletred")+
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "QQ-plot for Credit Score", x="", y = "")
+```
+
+Following the arguments on the last two graphs, the distribution of the credit score neither follows a normal distribution.
+
+### Box plots.
+
+We are going to use the box plots to show the centrality measures and the range of the data values.
+
+#### Box plot for Loan Amount.
+
+```{r chunk8, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+ggplot(loans, aes(loan_amount))+
+  geom_boxplot(fill = "hotpink", color= "mediumvioletred")+
+  theme_minimal()+
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Boxplot for Loan Amount", x="", y = "")
+```
+
+This box plot visualizes the distribution of loan amounts for applicants. The box plot shows a concentrated and symmetric distribution of loan amounts; suggesting that most applicants fall within this loan bracket. This support the distribution seen in the histogram. 
+
+\newpage
+
+#### Box plot for Annual Income of the Applicant.
+
+```{r chunk9, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+ggplot(loans, aes(income_annum))+
+  geom_boxplot(fill = "hotpink", color= "mediumvioletred")+
+  theme_minimal()+
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Boxplot for Annual Income of the Applicant", x="", y = "")
+```
+
+This box plot also shows a concentrated and symmetric distribution of the Annual Income of the Applicant. As we said before, in India a very small percentage of the population owns the majority of the national wealth. This is a consequence of the social class stratification. Let's delve a little deeper into the society of this country: in Hinduism, the term Varna refers to a social class within the hierarchical structure of traditional Hindu society. This system is outlined in texts like the Manusmriti, which categorizes and ranks four main varnas and specifies their occupations, duties, and moral obligations, or Dharma. The main varnas are: Brahmins (scholars, priests, or teachers), Kshatriyas: (rulers, administrators, or warriors), Vaishyas (farmers, merchants, or agriculturalists) and Shudras (artisans, laborers, or servants). This makes less probables that Vaishyas and Shudras ask for a loan. This fourfold classification represents a form of social stratification distinct from the more complex system of Jatis, often referred to as "caste" in European terminology.
+
+\newpage
+
+#### Box plot for Credit Score.
+
+```{r chunk10, tidy = TRUE, tidy.opts = list(width.cutoff = 60)}
+ggplot(loans, aes(cibil_score))+
+  geom_boxplot(fill = "hotpink", color= "mediumvioletred")+
+  theme_minimal()+
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Boxplot for Credit Score", x="", y = "")
+```
+
+In this third box plot, we see something similar to the other ones, a symmetric and concentrated distribution.
+
+\newpage
+
+### Violin plots.
+
+A violin plot is a combination of a density and a box plot, so we can see the distribution and the probability density of our chosen variables.
+
+```{r chunk11,}
+ggplot(loans, aes(x = 1, y = loan_amount))+
+  geom_violin(color = "mediumvioletred", fill = "hotpink") + theme_minimal()
+```
+
+This violin plot shows that the most common loan amounts are concentrated around 20 million, with fewer requests for amounts significantly higher or lower than this. This pattern could inform lenders about the typical loan demands in the Indian market, focusing on midsized loans for either personal or business purposes.
+
+```{r chunk12,}
+ggplot(loans, aes(x = 1, y = income_annum))+
+  geom_violin(color = "mediumvioletred", fill = "hotpink") + theme_minimal()
+```
+
+This violin plot shows that Annual Income of the Applicant of a loan in India have a wide distribution, which could mean that the economy of the applicants are not similar.
+
+```{r chunk13,}
+ggplot(loans, aes(x = 1, y = cibil_score))+
+  geom_violin(color = "mediumvioletred", fill = "hotpink") + theme_minimal()
+```
+
+This plot shows that the Credit score is very diverse in India.
+
+## Plots for grouped data.
+
+```{r chunk14,}
+library(scales)
+
+ggplot(loans, aes(x = "", fill = cibil_score_char)) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Distribución de Cibil Score",
+       fill = "Cibil Score",
+       x = NULL, 
+       y = NULL) +
+  theme_minimal() +
+  theme(axis.text = element_blank(),  
+        axis.ticks = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"), 
+        legend.position = "right") + 
+  scale_fill_manual(values = c("hotpink", "mediumvioletred", "lightpink", "deeppink")) + 
+  geom_text(aes(label = scales::percent(..count../sum(..count..), accuracy = 1)),
+            stat = "count", position = position_stack(vjust = 0.5))  
+
+```
+
+\newpage
+
+### Histograms and density plots.
+
+```{r chunk15,}
+qplot(loan_amount, data = loans, geom = "density", color = cibil_score_char) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+```
+
+In this graph we can see that there is not difference in the density of the loan amount between the different credit score values. This also happens for the annual income of the applicant, as we show below.
+
+```{r chunk16,}
+qplot(loan_amount, data = loans, geom = "density", color = cibil_score_char) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+```
+
+From now on we are going to make these analysis using the categorical variable: loan status Although it is not the same as in section 0.5 Comparison of continuous variables, the civil_score_char did not give us much to analyze since it doesn't seem to affect the distribution of our continuous variables (the plots were also not too attractive); that is why we have chosen the columnLoan Status to analyze the following plots: 
+
+\newpage
+
+
+#### Frequency of Loan amount by Loan status.
+
+
+```{r chunk17,}
+ggplot(loans, aes(loan_amount)) +
+  geom_histogram(aes(y = ..density.., fill = loan_status, color = loan_status), bins = 12) +
+  geom_density(aes(color = loan_status)) +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  scale_color_manual(values = c("deeppink", "mediumvioletred")) +
+  facet_wrap(~ loan_status) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Frequency of Loan amount by Loan status", x = "Loan Amount", y = "Frequency")
+```
+
+The graph presents two density plots, one for approved loans and one for rejected loans, illustrating the distribution of loan amounts within each category. Both approved and rejected loans appear to fall within a similar range, with the majority of loans concentrated between 0 and 2 million. There is some overlap between the two distributions, suggesting that loan amounts alone may not be a strong predictor of loan approval or rejection.
+
+\newpage
+
+#### Frequency of Credit score by Loan status.
+
+```{r chunk18,}
+ggplot(loans, aes(cibil_score)) +
+  geom_histogram(aes(y = ..density.., fill = loan_status, color = loan_status), bins = 12) +
+  geom_density(aes(color = loan_status)) +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  scale_color_manual(values = c("deeppink", "mediumvioletred")) +
+  facet_wrap(~ loan_status) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Frequency of Credit score by Loan status", x = "Credit score", y = "Frequency")
+```
+
+In this graph, while the overall shapes are similar, there are differences in the density of loans within certain credit score ranges. For instance, there appears to be a higher density of approved loans around 600-700, while rejected loans might have a slightly higher density around 400-500. Credit score is likely a significant factor in loan approval decisions, but it's not the sole determinant. Other factors, such as income, employment history, and debt-to-income ratio, are likely considered as well.
+
+\newpage
+
+#### Frequency of Annual Income of the Applicant by Loan status.
+
+```{r chunk19, tidy = TRUE, tidy.opts =list(width.cutoff = 50)}
+ggplot(loans, aes(income_annum)) +
+  geom_histogram(aes(y = ..density.., fill = loan_status, color = loan_status), bins = 12) +
+  geom_density(aes(color = loan_status)) +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  scale_color_manual(values = c("deeppink", "mediumvioletred")) +
+  facet_wrap(~ loan_status) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Frequency of Annual Income of the Applicant by Loan status", x = "Annual Income of the Applicant", y = "Frequency")
+```
+
+The graph presents two density distributions, one for approved loans and one for rejected loans, illustrating the distribution of annual incomes within each category. Both approved and rejected loans appear to fall within a similar range, with the majority of incomes concentrated between 0 and 10 million. While the overall shapes are similar, there are differences in the density of loans within certain annual income ranges.
+
+\newpage
+
+### QQ Plots.
+
+This qq plots shows that non of this variables follows a normal distribution.
+
+#### QQ-plot for Loan Amount.
+
+```{r chunk20,}
+ggplot(loans, aes(sample = loan_amount)) +
+  stat_qq(aes(color = loan_status)) +
+  stat_qq_line(aes(color = loan_status)) +
+  facet_wrap(~ loan_status) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "QQ-plot for Loan Amount") +
+  scale_color_manual(values = c("lightpink", "deeppink"))
+```
+
+\newpage
+
+#### QQ-plot for Credit score.
+
+```{r chunk21,}
+ggplot(loans, aes(sample = cibil_score)) +
+  stat_qq(aes(color = loan_status)) +
+  stat_qq_line(aes(color = loan_status)) +
+  facet_wrap(~ loan_status) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "QQ-plot for Credit score") +
+  scale_color_manual(values = c("lightpink", "deeppink"))
+```
+
+\newpage
+
+#### QQ-plot for Annual Income of the Applicant.
+
+```{r chunk22,}
+ggplot(loans, aes(sample = income_annum)) +
+  stat_qq(aes(color = loan_status)) +
+  stat_qq_line(aes(color = loan_status)) +
+  facet_wrap(~ loan_status) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "QQ-plot for Annual Income of the Applicant") +
+  scale_color_manual(values = c("lightpink", "deeppink"))
+```
+
+\newpage
+
+### Box plots.
+
+#### Box plot for Loan amount.
+
+```{r chunk23,}
+ggplot(loans, aes(x = loan_status, y = loan_amount)) +
+  geom_boxplot(aes(fill = loan_status), color = "deeppink") +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Boxplot for Loan amount", x = "Loan status", y = "Loan amount") +
+  scale_x_discrete(labels = c("approved", "rejected")) 
+```
+
+\newpage
+
+#### Box plot for Credit score.
+
+```{r chunk24,}
+ggplot(loans, aes(x = loan_status, y = cibil_score)) +
+  geom_boxplot(aes(fill = loan_status), color = "deeppink") +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Boxplot for Credit score", x = "Loan status", y = "Credit score")+
+  scale_x_discrete(labels = c("approved", "rejected")) 
+```
+
+\newpage
+
+#### Box plot for Annual Income of the Applicant.
+
+```{r chunk25, tidy = TRUE, tidy.opts =list(width.cutoff = 40)}
+ggplot(loans, aes(x = loan_status, y = income_annum)) +
+  geom_boxplot(aes(fill = loan_status), color = "deeppink") +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  labs(title = "Boxplot for Annual Income of the Applicant", x = "Loan status", y = "Annual Income of the Applicant")+
+  scale_x_discrete(labels = c("approved", "rejected"))
+```
+
+\newpage
+
+### Violin plots.
+
+#### Violin Plot of Loan amount by Loan status.
+
+```{r chunk26,}
+ggplot(loans, aes(x = loan_status, y = loan_amount)) +
+  geom_violin(aes(fill = loan_status)) +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  theme_minimal() +
+  labs(title = "Violin Plot of Loan amount by Loan status", x = "Loan amount", y = "Loan status") +
+  scale_x_discrete(labels = c("Approved", "Rejected"))
+```
+
+The violin plot illustrates the distribution of loan amounts based on whether they were approved or rejected. Both approved and rejected loans exhibit similar distributions, with a concentration of lower loan amounts and a gradual decrease towards higher amounts. This suggests that most loan applications tend to be for smaller amounts. The violin for approved loans appears to have a slightly higher density peak at the lower end of the range, suggesting that most approved loans tend to be for smaller amounts.
+
+\newpage
+
+#### Violin Plot of Credit score by Loan status.
+
+```{r chunk27, tidy = TRUE, tidy.opts =list(width.cutoff = 45)}
+ggplot(loans, aes(x = loan_status, y = cibil_score)) +
+  geom_violin(aes(fill = loan_status)) +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  theme_minimal() +
+  labs(title = "Violin Plot of Credit score by Loan status", x = "Credit score", y = "Loan status") +
+  scale_x_discrete(labels = c("Approved", "Rejected"))
+```
+
+The violin plot clearly shows that credit score is a key factor in the loan approval decision. Applicants with higher credit scores have a higher probability of obtaining approval. However, it's important to note that credit score is not the sole factor considered, and other factors such as payment history, income, and debt-to-income ratio also play a significant role.
+
+\newpage
+
+#### Violin Plot of Annual Income of the Applicant by Loan status.
+
+```{r chunk28, tidy = TRUE, tidy.opts =list(width.cutoff = 40)}
+ggplot(loans, aes(x = loan_status, y = income_annum)) +
+  geom_violin(aes(fill = loan_status)) +
+  scale_fill_manual(values = c("lightpink", "hotpink")) +
+  theme_minimal() +
+  labs(title = "Violin Plot of Annual Income of the Applicant by Loan status", x = "Annual Income of the Applicant", y = "Loan status") +
+  scale_x_discrete(labels = c("Approved", "Rejected"))
+```
+
+In this case, both approved and rejected loans exhibit similar distributions, with a concentration of lower annual incomes and a gradual decrease towards higher incomes. This suggests that a majority of loan applicants tend to have lower to moderate annual incomes. The results suggest that annual income is a factor considered by lenders in loan approval decisions. Applicants with higher incomes may be perceived as having a lower risk of default.
+
+
+\newpage
+
+## Categorical variables analysis.
+
+### Frequency table.
+
+Here we take the categorical variable Education and obtain its frequency table.
+
+```{r chunk29,}
+library(knitr)
+
+frequency_table <- table(loans$education)
+
+frequency_df <- as.data.frame(frequency_table)
+
+# rename the columns
+colnames(frequency_df) <- c("Education", "Frequency")
+
+# Campute the percentage
+total_count <- sum(frequency_df$Frequency) 
+frequency_df$Percentage <- (frequency_df$Frequency / total_count) * 100  
+
+frequency_df <- frequency_df %>% 
+              mutate(across(where(is.numeric), round, 2)) %>%
+              mutate(Percentage = paste0(Percentage, "%"))
+
+
+kable(frequency_df, 
+      col.names = c("Education", "Frequency", "Percentage (%)"),
+      caption = "Frequency table of Education",
+      align = "c")  
+```
+
+
+According to data published by UNESCO in 2022, India has a literacy rate of 76.32%. Therefore, as shown in this table, where 50,22% of our sample has graduated, it confirms that our sample is not representative of the entire population of India, and only a minority has the opportunity to apply for a loan from a bank.
+
+
+### Descriptive contingency table.
+
+In this one, we take the variables Loan status and Education (both categorical) and obtain their contingency table.
+
+```{r chunk30,}
+contingency_table <- table(loans$loan_status, loans$education)
+kable(contingency_table)
+```
+
+From this table it seems that the education does not affect on the probability of having the loan approved or rejected.
+
+
+\newpage
+
+
+### Mosaic plots.
+
+This mosaic plot might not be visually appealing, but it provides a wealth of information. As we can see, being rejected is quite uncommon when the credit score is excellent, fair, or good. However, this changes when the credit score is poor— in that case, rejection becomes much more likely.
+
+```{r chunk31,}
+
+library(ggmosaic)
+
+ggplot(loans) +
+  geom_mosaic(aes(x = product(loan_status, cibil_score_char), fill = loan_status)) +
+  labs(title = "Mosaic Plot of Loan Status vs. Credit score", 
+       x = "Loan Status", 
+       y = "Credit score", 
+       fill = "Loan Status") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c("hotpink", "lightpink"))
+```
+
+From this we can conclude that the cibil score, or risk of non-payment, does influence significantly in the final status of the loan. 
+
+
+
+
+
+
+\newpage
+
+## Bibliography
+
+
+
+
+
